@@ -47,8 +47,8 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const lockClass = locked ? 'opacity-70' : '';
   const safeRepetitions = Number.isFinite(setup.repetitions) && setup.repetitions > 0 ? Math.floor(setup.repetitions) : 3;
-  const moveDuration = Number.isFinite(setup.speed) ? `${Math.max(1, setup.speed).toFixed(1)}s` : '-';
-  const motorSteps = Number.isFinite(setup.speed) ? `${Math.round(setup.speed * 8)} step` : '-';
+  const moveDuration = Number.isFinite(setup.speed) ? `${Math.max(0.1, setup.speed).toFixed(1)}s` : '-';
+  const motorSteps = setup.motionMode === 'Linear' && Number.isFinite(setup.distanceMm) ? `${Math.round(setup.distanceMm * 1600)} step` : setup.motionMode === 'Rotation' && Number.isFinite(setup.angleDeg) ? `${Math.round(setup.angleDeg * 8.8889)} step` : '-';
   const connectionButtonLabel = isConnecting ? 'Connecting...' : connectionStatus;
   const connectionButtonClass =
     connectionStatus === 'Connected'
@@ -102,7 +102,7 @@ export const Sidebar = ({
               onChange={(angleDeg) => onSetupChange({ ...setup, angleDeg })}
             />
           )}
-          <NumberInput label="Speed" value={setup.speed} disabled={locked} onChange={(speed) => onSetupChange({ ...setup, speed })} />
+          <NumberInput label="Duration" suffix="s" value={setup.speed} disabled={locked} onChange={(speed) => onSetupChange({ ...setup, speed })} />
           <NumberInput
             label="Repetitions"
             value={setup.repetitions}
@@ -123,13 +123,13 @@ export const Sidebar = ({
           <SensorValueCard
             icon={<ThermometerSun size={18} strokeWidth={2.6} />}
             label="Temp"
-            value="NULL"
+            value={roomTemperature.toFixed(1)}
             unit="°C"
           />
           <SensorValueCard
             icon={<Droplets size={18} strokeWidth={2.6} />}
             label="Humidity"
-            value="NULL"
+            value={`${roomHumidity}`}
             unit="%"
           />
         </div>
@@ -160,9 +160,25 @@ export const Sidebar = ({
               />
             </div>
           ) : (
-            <div className="mt-5 grid gap-4">
-              <NumberInput label="Kalman Q" value={filterParams.kalmanQ} step={0.001} onChange={(kalmanQ) => onFilterChange({ ...filterParams, kalmanQ })} />
-              <NumberInput label="Kalman R" value={filterParams.kalmanR} step={0.001} onChange={(kalmanR) => onFilterChange({ ...filterParams, kalmanR })} />
+            <div className="mt-5 grid gap-5">
+              <RangeInput
+                label="Kalman Q"
+                value={filterParams.kalmanQ}
+                min={0.0001}
+                max={0.02}
+                step={0.0001}
+                formatValue={(value) => value.toFixed(4)}
+                onChange={(kalmanQ) => onFilterChange({ ...filterParams, kalmanQ })}
+              />
+              <RangeInput
+                label="Kalman R"
+                value={filterParams.kalmanR}
+                min={0.001}
+                max={1}
+                step={0.001}
+                formatValue={(value) => value.toFixed(3)}
+                onChange={(kalmanR) => onFilterChange({ ...filterParams, kalmanR })}
+              />
             </div>
           )}
         </div>
@@ -298,19 +314,35 @@ const RangeInput = ({
   value,
   min,
   max,
+  step = 1,
   onChange,
-  disabled
+  disabled,
+  formatValue = (currentValue) => String(currentValue)
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
+  step?: number;
   onChange: (value: number) => void;
   disabled?: boolean;
+  formatValue?: (value: number) => string;
 }) => (
   <label className="block">
-    <div className="mb-2 flex items-center justify-between text-xs font-bold text-secondary"><span>{label}</span><span>{value}</span></div>
-    <input type="range" min={min} max={max} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} className="green-range w-full disabled:cursor-not-allowed" />
+    <div className="mb-2 flex items-center justify-between text-xs font-bold text-secondary">
+      <span>{label}</span>
+      <span>{formatValue(value)}</span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(Number(event.target.value))}
+      className="green-range w-full disabled:cursor-not-allowed"
+    />
   </label>
 );
 

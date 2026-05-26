@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DataVisualizationPanel } from './components/DataVisualizationPanel';
@@ -86,27 +86,34 @@ function App() {
       ? Math.floor(setup.repetitions)
       : DEFAULT_DUMMY_REPETITIONS;
 
-  const liveRepetitions = useMemo(
+  const maxReceivedRepetition = useMemo(() => {
+    const received = Object.keys(rawSamplesByRepetition)
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    return received.length ? Math.max(...received) : 0;
+  }, [rawSamplesByRepetition]);
+
+  const totalRepetitions = Math.max(safeRepetitionCount, maxReceivedRepetition, selectedRepetition, 1);
+
+  const selectedSamples = rawSamplesByRepetition[selectedRepetition] ?? [];
+  const deferredSelectedSamples = useDeferredValue(selectedSamples);
+  const deferredFilterParams = useDeferredValue(filterParams);
+  const deferredFftParams = useDeferredValue(fftParams);
+
+  const selectedData = useMemo(
     () =>
-      Object.entries(rawSamplesByRepetition)
-        .map(([repetition, samples]) =>
-          createRepetitionFromRawSamples(
-            Number(repetition),
-            samples,
+      deferredSelectedSamples.length
+        ? createRepetitionFromRawSamples(
+            selectedRepetition,
+            deferredSelectedSamples,
             setup.recordDurationSec,
-            filterParams,
-            fftParams
+            deferredFilterParams,
+            deferredFftParams
           )
-        )
-        .sort((a, b) => a.repetition - b.repetition),
-    [rawSamplesByRepetition, setup.recordDurationSec, filterParams, fftParams]
+        : createEmptyRepetition(selectedRepetition),
+    [deferredSelectedSamples, selectedRepetition, setup.recordDurationSec, deferredFilterParams, deferredFftParams]
   );
-
-  const totalRepetitions = Math.max(safeRepetitionCount, liveRepetitions.length, 1);
-
-  const selectedData =
-    liveRepetitions.find((repetition) => repetition.repetition === selectedRepetition) ??
-    createEmptyRepetition(selectedRepetition);
 
   const bumpVersionIfLocked = () => {
     if (!locked) return;
@@ -124,17 +131,21 @@ function App() {
   };
 
   const handleSignalChunk = (chunk: SignalChunk) => {
+    const repetition = Math.max(1, Math.floor(chunk.repetition || 1));
+
     setRawSamplesByRepetition((current) => {
-      const previous = current[chunk.repetition] ?? [];
+      const previous = current[repetition] ?? [];
 
       return {
         ...current,
-        [chunk.repetition]: [...previous, ...chunk.samples]
+        [repetition]: [...previous, ...chunk.samples]
       };
     });
 
-    setSelectedRepetition((current) => (current === 1 && chunk.repetition !== 1 ? chunk.repetition : current));
-    setDeviceStatus(`Receiving signal data: repetition ${chunk.repetition}, ${chunk.samples.length} samples`);
+    // Do not auto-jump to the newest repetition.
+    // This keeps Repetition 1 visible while later repetitions are being received,
+    // and every repetition remains selectable as its own dataset.
+    setDeviceStatus(`Receiving signal data: repetition ${repetition}, ${chunk.samples.length} samples`);
   };
 
   const handleToggleConnection = async () => {
@@ -262,7 +273,7 @@ function App() {
       : DEFAULT_DUMMY_REPETITIONS;
 
     setSetup(normalized);
-    setSelectedRepetition((current) => Math.min(current, nextRepetitionLimit));
+    setSelectedRepetition((current) => Math.min(current, Math.max(nextRepetitionLimit, maxReceivedRepetition, 1)));
   };
 
   const setSafeFilter = (next: FilterParameters) => {

@@ -212,29 +212,81 @@ export const round = (value: number, digits = 4) => Number(value.toFixed(digits)
 
 const computeMagnitudeSpectrum = (values: number[], fftSize: number): number[] => {
   const centered = removeMean(values);
-  const padded = new Array(fftSize).fill(0);
+  const real = new Array(fftSize).fill(0);
+  const imaginary = new Array(fftSize).fill(0);
 
   for (let index = 0; index < centered.length; index++) {
-    padded[index] = centered[index] * hannWindow(index, centered.length);
+    real[index] = centered[index] * hannWindow(index, centered.length);
   }
+
+  fftRadix2(real, imaginary);
 
   const spectrum: number[] = [];
   const maxBin = Math.floor(fftSize / 2);
 
   for (let bin = 0; bin <= maxBin; bin++) {
-    let real = 0;
-    let imaginary = 0;
-
-    for (let sample = 0; sample < fftSize; sample++) {
-      const angle = (-2 * Math.PI * bin * sample) / fftSize;
-      real += padded[sample] * Math.cos(angle);
-      imaginary += padded[sample] * Math.sin(angle);
-    }
-
-    spectrum.push((2 * Math.sqrt(real * real + imaginary * imaginary)) / Math.max(1, values.length));
+    spectrum.push((2 * Math.sqrt(real[bin] * real[bin] + imaginary[bin] * imaginary[bin])) / Math.max(1, values.length));
   }
 
   return spectrum;
+};
+
+const fftRadix2 = (real: number[], imaginary: number[]): void => {
+  const size = real.length;
+  const levels = Math.log2(size);
+
+  if (!Number.isInteger(levels)) {
+    throw new Error('FFT size must be a power of two');
+  }
+
+  for (let index = 0; index < size; index++) {
+    const reversed = reverseBits(index, levels);
+
+    if (reversed > index) {
+      [real[index], real[reversed]] = [real[reversed], real[index]];
+      [imaginary[index], imaginary[reversed]] = [imaginary[reversed], imaginary[index]];
+    }
+  }
+
+  for (let blockSize = 2; blockSize <= size; blockSize *= 2) {
+    const halfBlock = blockSize / 2;
+    const angleStep = (-2 * Math.PI) / blockSize;
+    const phaseStepReal = Math.cos(angleStep);
+    const phaseStepImaginary = Math.sin(angleStep);
+
+    for (let blockStart = 0; blockStart < size; blockStart += blockSize) {
+      let phaseReal = 1;
+      let phaseImaginary = 0;
+
+      for (let offset = 0; offset < halfBlock; offset++) {
+        const evenIndex = blockStart + offset;
+        const oddIndex = evenIndex + halfBlock;
+
+        const oddReal = phaseReal * real[oddIndex] - phaseImaginary * imaginary[oddIndex];
+        const oddImaginary = phaseReal * imaginary[oddIndex] + phaseImaginary * real[oddIndex];
+
+        real[oddIndex] = real[evenIndex] - oddReal;
+        imaginary[oddIndex] = imaginary[evenIndex] - oddImaginary;
+        real[evenIndex] += oddReal;
+        imaginary[evenIndex] += oddImaginary;
+
+        const nextPhaseReal = phaseReal * phaseStepReal - phaseImaginary * phaseStepImaginary;
+        phaseImaginary = phaseReal * phaseStepImaginary + phaseImaginary * phaseStepReal;
+        phaseReal = nextPhaseReal;
+      }
+    }
+  }
+};
+
+const reverseBits = (value: number, bitCount: number): number => {
+  let reversed = 0;
+
+  for (let index = 0; index < bitCount; index++) {
+    reversed = (reversed << 1) | (value & 1);
+    value >>= 1;
+  }
+
+  return reversed;
 };
 
 const removeMean = (values: number[]): number[] => {
