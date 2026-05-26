@@ -1,0 +1,324 @@
+import type React from 'react';
+import { CheckCircle2, Droplets, Radio, SlidersHorizontal, Thermometer, ThermometerSun, Waves } from 'lucide-react';
+import type {
+  AcquisitionState,
+  ConnectionStatus,
+  ExperimentSetup,
+  FilterParameters,
+  FilterType,
+  FftParameters,
+  MotionMode,
+  TimeAxisMode
+} from '../types';
+import { SegmentedControl } from './SegmentedControl';
+
+interface SidebarProps {
+  connectionStatus: ConnectionStatus;
+  deviceStatus: string;
+  isConnecting: boolean;
+  acquisitionState: AcquisitionState;
+  setup: ExperimentSetup;
+  filterParams: FilterParameters;
+  fftParams: FftParameters;
+  axisMode: TimeAxisMode;
+  locked: boolean;
+  onToggleConnection: () => void;
+  onSetupChange: (setup: ExperimentSetup) => void;
+  onFilterChange: (params: FilterParameters) => void;
+  onFftChange: (params: FftParameters) => void;
+  onAxisModeChange: (mode: TimeAxisMode) => void;
+}
+
+export const Sidebar = ({
+  connectionStatus,
+  deviceStatus,
+  isConnecting,
+  acquisitionState,
+  setup,
+  filterParams,
+  fftParams,
+  axisMode,
+  locked,
+  onToggleConnection,
+  onSetupChange,
+  onFilterChange,
+  onFftChange,
+  onAxisModeChange
+}: SidebarProps) => {
+  const lockClass = locked ? 'opacity-70' : '';
+  const safeRepetitions = Number.isFinite(setup.repetitions) && setup.repetitions > 0 ? Math.floor(setup.repetitions) : 3;
+  const moveDuration = Number.isFinite(setup.speed) ? `${Math.max(1, setup.speed).toFixed(1)}s` : '-';
+  const motorSteps = Number.isFinite(setup.speed) ? `${Math.round(setup.speed * 8)} step` : '-';
+  const connectionButtonLabel = isConnecting ? 'Connecting...' : connectionStatus;
+  const connectionButtonClass =
+    connectionStatus === 'Connected'
+      ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
+      : 'bg-warning-red text-white shadow-neu-button hover:brightness-95';
+
+  const roomTemperature = 27.4;
+  const roomHumidity = 64;
+
+  return (
+    <aside className="custom-scrollbar sidebar-scroll-viewport grid gap-5 bg-transparent pr-1 xl:sticky xl:top-4">
+      <Panel title="System Setup" icon={<Radio size={17} />}>
+        <button
+          type="button"
+          disabled={isConnecting}
+          onClick={onToggleConnection}
+          className={`mb-3 w-full rounded-[18px] px-4 py-3 text-center text-sm font-black transition disabled:cursor-wait disabled:opacity-70 ${connectionButtonClass}`}
+        >
+          {connectionButtonLabel}
+        </button>
+
+        <div className="mb-5 rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-secondary">Device status</p>
+          <p className="mt-1 text-sm font-black text-primary">{deviceStatus}</p>
+        </div>
+
+        <ControlLabel label="Mode">
+          <SegmentedControl
+            options={['Linear', 'Rotation'] as MotionMode[]}
+            value={setup.motionMode}
+            onChange={(motionMode) => onSetupChange({ ...setup, motionMode })}
+            disabled={locked}
+          />
+        </ControlLabel>
+
+        <div className={`mt-5 grid gap-4 ${lockClass}`}>
+          {setup.motionMode === 'Linear' ? (
+            <NumberInput
+              label="Distance"
+              suffix="mm"
+              value={setup.distanceMm}
+              disabled={locked}
+              onChange={(distanceMm) => onSetupChange({ ...setup, distanceMm })}
+            />
+          ) : (
+            <NumberInput
+              label="Angle"
+              suffix="deg"
+              value={setup.angleDeg}
+              disabled={locked}
+              onChange={(angleDeg) => onSetupChange({ ...setup, angleDeg })}
+            />
+          )}
+          <NumberInput label="Speed" value={setup.speed} disabled={locked} onChange={(speed) => onSetupChange({ ...setup, speed })} />
+          <NumberInput
+            label="Repetitions"
+            value={setup.repetitions}
+            disabled={locked}
+            min={1}
+            onChange={(repetitions) =>
+              onSetupChange({
+                ...setup,
+                repetitions: Number.isFinite(repetitions) ? Math.max(1, Math.floor(repetitions)) : Number.NaN
+              })
+            }
+          />
+        </div>
+      </Panel>
+
+      <Panel title="Ambient Conditions" icon={<Thermometer size={17} />}>
+        <div className="grid grid-cols-2 gap-4">
+          <SensorValueCard
+            icon={<ThermometerSun size={18} strokeWidth={2.6} />}
+            label="Temp"
+            value={roomTemperature.toFixed(1)}
+            unit="°C"
+          />
+          <SensorValueCard
+            icon={<Droplets size={18} strokeWidth={2.6} />}
+            label="Humidity"
+            value={`${roomHumidity}`}
+            unit="%"
+          />
+        </div>
+      </Panel>
+
+      <Panel title="Filter Settings" icon={<SlidersHorizontal size={17} />}>
+        <div>
+          <SegmentedControl
+            options={['Savitzky-Golay', 'Kalman'] as FilterType[]}
+            value={filterParams.type}
+            onChange={(type) => onFilterChange({ ...filterParams, type })}
+          />
+          {filterParams.type === 'Savitzky-Golay' ? (
+            <div className="mt-5 grid gap-5">
+              <RangeInput
+                label="Window"
+                value={filterParams.windowLength}
+                min={3}
+                max={41}
+                onChange={(windowLength) => onFilterChange({ ...filterParams, windowLength })}
+              />
+              <RangeInput
+                label="Order"
+                value={filterParams.polynomialOrder}
+                min={1}
+                max={5}
+                onChange={(polynomialOrder) => onFilterChange({ ...filterParams, polynomialOrder })}
+              />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-4">
+              <NumberInput label="Kalman Q" value={filterParams.kalmanQ} step={0.001} onChange={(kalmanQ) => onFilterChange({ ...filterParams, kalmanQ })} />
+              <NumberInput label="Kalman R" value={filterParams.kalmanR} step={0.001} onChange={(kalmanR) => onFilterChange({ ...filterParams, kalmanR })} />
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      <Panel title="FFT Settings" icon={<Waves size={17} />}>
+        <div className={`grid gap-4 ${lockClass}`}>
+          <RangeInput
+            label="FFT Min Frequency"
+            value={fftParams.minFrequency}
+            min={0}
+            max={30}
+            disabled={locked}
+            onChange={(minFrequency) => onFftChange({ ...fftParams, minFrequency })}
+          />
+          <RangeInput
+            label="FFT Max Frequency"
+            value={fftParams.maxFrequency}
+            min={80}
+            max={160}
+            disabled={locked}
+            onChange={(maxFrequency) => onFftChange({ ...fftParams, maxFrequency })}
+          />
+          <RangeInput
+            label="Zero Padding Factor"
+            value={fftParams.zeroPaddingFactor}
+            min={1}
+            max={8}
+            disabled={locked}
+            onChange={(zeroPaddingFactor) => onFftChange({ ...fftParams, zeroPaddingFactor })}
+          />
+          <ControlLabel label="Time Axis">
+            <SegmentedControl options={['t', 't²'] as TimeAxisMode[]} value={axisMode} onChange={onAxisModeChange} disabled={locked} />
+          </ControlLabel>
+        </div>
+      </Panel>
+
+      <Panel title="Motor Movement Summary" icon={<CheckCircle2 size={17} />}>
+        <SummaryRow label="State" value={acquisitionState} />
+        <SummaryRow label="Movement Type" value={setup.motionMode === 'Rotation' ? 'Rotation' : 'Linear'} />
+        <SummaryRow label="Input" value={setup.motionMode === 'Rotation' ? formatValue(setup.angleDeg, 'deg') : formatValue(setup.distanceMm, 'mm')} />
+        <SummaryRow label="Repetitions" value={`${safeRepetitions}`} />
+        <SummaryRow label="Move Duration" value={moveDuration} />
+        <SummaryRow label="Motor Steps" value={motorSteps} />
+      </Panel>
+    </aside>
+  );
+};
+
+const Panel = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
+  <section className="rounded-[28px] bg-card p-5 shadow-neu-raised">
+    <div className="mb-5 flex items-center justify-between">
+      <div className="flex items-center gap-2 text-primary">
+        {icon}
+        <h3 className="text-base font-black">{title}</h3>
+      </div>
+    </div>
+    {children}
+  </section>
+);
+
+const SensorValueCard = ({
+  icon,
+  label,
+  value,
+  unit
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  unit: string;
+}) => (
+  <div className="rounded-[22px] bg-card px-4 py-4 shadow-neu-inset-soft">
+    <div className="mb-3 flex items-center gap-2">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-soft-green text-dark-green shadow-neu-inset-soft">
+        {icon}
+      </span>
+      <span className="text-[11px] font-black uppercase tracking-[0.14em] text-secondary">{label}</span>
+    </div>
+    <div className="flex items-end gap-1">
+      <span className="text-2xl font-black leading-none text-primary">{value}</span>
+      <span className="text-sm font-black leading-none text-dark-green">{unit}</span>
+    </div>
+  </div>
+);
+
+const ControlLabel = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <label className="block">
+    <span className="mb-2 block text-xs font-bold text-secondary">{label}</span>
+    {children}
+  </label>
+);
+
+const NumberInput = ({
+  label,
+  value,
+  onChange,
+  disabled,
+  step = 1,
+  min,
+  suffix
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+  step?: number;
+  min?: number;
+  suffix?: string;
+}) => {
+  const displayValue = Number.isFinite(value) ? String(value) : '';
+
+  return (
+    <label className="relative block">
+      <span className="sr-only">{label}</span>
+      <input
+        type="number"
+        step={step}
+        min={min}
+        value={displayValue}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value === '' ? Number.NaN : Number(event.target.value))}
+        placeholder={label}
+        className="w-full rounded-[20px] bg-card px-4 py-4 text-sm font-bold text-primary outline-none shadow-neu-inset-soft placeholder:text-secondary disabled:cursor-not-allowed"
+      />
+      {suffix && displayValue && <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-secondary">{suffix}</span>}
+    </label>
+  );
+};
+
+const RangeInput = ({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  disabled
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+}) => (
+  <label className="block">
+    <div className="mb-2 flex items-center justify-between text-xs font-bold text-secondary"><span>{label}</span><span>{value}</span></div>
+    <input type="range" min={min} max={max} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} className="green-range w-full disabled:cursor-not-allowed" />
+  </label>
+);
+
+const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex justify-between gap-4 border-b border-border/60 py-2 text-xs">
+    <span className="font-semibold text-secondary">{label}</span>
+    <span className="text-right font-black text-primary">{value}</span>
+  </div>
+);
+
+const formatValue = (value: number, unit: string) => (Number.isFinite(value) ? `${value} ${unit}` : '-');
