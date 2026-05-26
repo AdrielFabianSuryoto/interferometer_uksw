@@ -123,13 +123,13 @@ export const Sidebar = ({
           <SensorValueCard
             icon={<ThermometerSun size={18} strokeWidth={2.6} />}
             label="Temp"
-            value={roomTemperature.toFixed(1)}
+            value="NULL"
             unit="°C"
           />
           <SensorValueCard
             icon={<Droplets size={18} strokeWidth={2.6} />}
             label="Humidity"
-            value={`${roomHumidity}`}
+            value="NULL"
             unit="%"
           />
         </div>
