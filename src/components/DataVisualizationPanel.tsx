@@ -78,6 +78,11 @@ export const DataVisualizationPanel = ({
   const sample = rawValues[75] ?? rawValues[0] ?? 0;
   const minRaw = rawValues.length ? Math.min(...rawValues) : 0;
   const maxRaw = rawValues.length ? Math.max(...rawValues) : 1;
+  const sampleCount = hasSignalData ? data.signal.length : 0;
+  const signalInfoText = hasSignalData
+    ? `Signal Plot - Repetition ${selectedRepetition} • sample ${sample.toFixed(3)} • min=${minRaw.toFixed(3)} • max=${maxRaw.toFixed(3)} • n=${sampleCount}`
+    : `Signal Plot - Repetition ${selectedRepetition} • waiting for signal data`;
+  const fftInfoText = '';
   const xKey = axisMode === 't²' ? 'timeSquared' : 'time';
   const amplitudeKey = fftSource === 'Filtered data' ? 'filteredAmplitude' : 'rawAmplitude';
   const dominant = fftSource === 'Filtered data' ? data?.dominantFiltered : data?.dominantRaw;
@@ -163,7 +168,7 @@ export const DataVisualizationPanel = ({
       };
 
   const metaText = plotMode === 'Signal Plot'
-    ? `Signal Plot - Repetition ${selectedRepetition} • X: ${axisMode} • sample ${sample.toFixed(3)} • min ${minRaw.toFixed(3)} • max ${maxRaw.toFixed(3)}`
+    ? signalInfoText
     : `FFT Plot - Repetition ${selectedRepetition} • Source: ${fftSource} • Frequency: ${fftParams.minFrequency.toFixed(2)}-${fftParams.maxFrequency.toFixed(2)} Hz`;
 
   return (
@@ -233,6 +238,11 @@ export const DataVisualizationPanel = ({
         </div>
 
         <div className="relative h-[620px] min-h-[440px] rounded-[24px] bg-white p-4 shadow-neu-inset-soft">
+          {plotMode === 'Signal Plot' && (
+            <div className="absolute left-5 top-4 z-[2] rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-bold text-secondary shadow-neu backdrop-blur">
+              {signalInfoText}
+            </div>
+          )}
           {plotMode === 'Signal Plot' ? (
             <>
               <div className="chart-legend-box">
@@ -241,7 +251,7 @@ export const DataVisualizationPanel = ({
               </div>
               {!hasSignalData && <EmptyChartNotice label="Waiting for signal data" />}
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={visibleSignal} margin={{ top: 26, right: 28, bottom: 38, left: 12 }}>
+                <LineChart data={visibleSignal} margin={{ top: 54, right: 28, bottom: 38, left: 12 }}>
                   <CartesianGrid stroke="#E5EDE5" />
                   <XAxis
                     dataKey={xKey}
@@ -271,7 +281,7 @@ export const DataVisualizationPanel = ({
               </div>
               {!hasFftData && <EmptyChartNotice label="Waiting for FFT data" />}
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={visibleFft} margin={{ top: 26, right: 28, bottom: 38, left: 12 }}>
+                <LineChart data={visibleFft} margin={{ top: 54, right: 28, bottom: 38, left: 12 }}>
                   <CartesianGrid stroke="#E5EDE5" />
                   <XAxis
                     dataKey="frequency"
