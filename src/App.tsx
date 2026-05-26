@@ -1,8 +1,9 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DataVisualizationPanel } from './components/DataVisualizationPanel';
 import { BottomActionBar } from './components/BottomActionBar';
+import { BlePairingModal } from './components/BlePairingModal';
 import {
   buildCsv,
   createEmptyRepetition,
@@ -27,6 +28,8 @@ import type {
   RepetitionData,
   TimeAxisMode
 } from './types';
+type PairingModalStatus = 'idle' | 'scanning' | 'connected' | 'failed';
+
 
 const DEFAULT_DUMMY_REPETITIONS = 3;
 
@@ -63,6 +66,8 @@ const createMetadata = (analysisIndex = 1, parameterIndex = 1): AnalysisMetadata
 function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('Disconnected');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
+  const [pairingModalStatus, setPairingModalStatus] = useState<PairingModalStatus>('idle');
   const [deviceStatus, setDeviceStatus] = useState('Ready to connect');
   const [acquisitionState, setAcquisitionState] = useState<AcquisitionState>('Idle');
   const [selectedRepetition, setSelectedRepetition] = useState(1);
@@ -76,6 +81,7 @@ function App() {
   const [analysisIndex, setAnalysisIndex] = useState(1);
   const [parameterIndex, setParameterIndex] = useState(1);
   const [rawSamplesByRepetition, setRawSamplesByRepetition] = useState<Record<number, number[]>>({});
+  const firstIncomingRepetitionOffsetRef = useRef<number | null>(null);
 
   // Keep controls editable because the current Start button can send multiple acquisition commands.
   // Real locking should be driven by ESP32 RUNNING/DONE states later.
@@ -130,8 +136,18 @@ function App() {
     }));
   };
 
+  const normalizeIncomingRepetition = (incomingRepetition: number): number => {
+    const safeIncomingRepetition = Math.max(1, Math.floor(incomingRepetition || 1));
+
+    if (firstIncomingRepetitionOffsetRef.current === null) {
+      firstIncomingRepetitionOffsetRef.current = safeIncomingRepetition - 1;
+    }
+
+    return Math.max(1, safeIncomingRepetition - firstIncomingRepetitionOffsetRef.current);
+  };
+
   const handleSignalChunk = (chunk: SignalChunk) => {
-    const repetition = Math.max(1, Math.floor(chunk.repetition || 1));
+    const repetition = normalizeIncomingRepetition(chunk.repetition);
 
     setRawSamplesByRepetition((current) => {
       const previous = current[repetition] ?? [];
@@ -142,23 +158,31 @@ function App() {
       };
     });
 
-    // Do not auto-jump to the newest repetition.
-    // This keeps Repetition 1 visible while later repetitions are being received,
-    // and every repetition remains selectable as its own dataset.
+    // Keep the user's selected repetition stable.
+    // Incoming hardware repetition numbers are normalized so the first received dataset is always Repetition 1.
     setDeviceStatus(`Receiving signal data: repetition ${repetition}, ${chunk.samples.length} samples`);
   };
 
-  const handleToggleConnection = async () => {
+  const handleToggleConnection = () => {
     if (connectionStatus === 'Connected') {
       disconnectInterferometerBle();
       setConnectionStatus('Disconnected');
+      setPairingModalStatus('idle');
+      setIsPairingModalOpen(false);
       setDeviceStatus('Device disconnected');
       setAcquisitionState('Idle');
       return;
     }
 
+    setPairingModalStatus('idle');
+    setIsPairingModalOpen(true);
+    setDeviceStatus('Ready to pair with ESP32-S3');
+  };
+
+  const handlePairDevice = async () => {
     try {
       setIsConnecting(true);
+      setPairingModalStatus('scanning');
       setDeviceStatus('Searching for ESP32-S3...');
 
       const result = await connectToInterferometerBle({
@@ -167,6 +191,7 @@ function App() {
 
           if (status === 'Device disconnected') {
             setConnectionStatus('Disconnected');
+            setPairingModalStatus('idle');
             setAcquisitionState('Idle');
           }
 
@@ -180,7 +205,8 @@ function App() {
         },
         onSignalChunk: handleSignalChunk,
         onRepetitionDone: (repetition: number) => {
-          setDeviceStatus(`Repetition ${repetition} received`);
+          const normalizedRepetition = normalizeIncomingRepetition(repetition);
+          setDeviceStatus(`Repetition ${normalizedRepetition} received`);
         },
         onAcquisitionDone: () => {
           setAcquisitionState('Completed');
@@ -188,16 +214,23 @@ function App() {
         },
         onDisconnect: () => {
           setConnectionStatus('Disconnected');
+          setPairingModalStatus('idle');
           setAcquisitionState('Idle');
           setDeviceStatus('Device disconnected');
         }
       });
 
       setConnectionStatus('Connected');
+      setPairingModalStatus('connected');
       setDeviceStatus(`Connected to ${result.deviceName}`);
+
+      window.setTimeout(() => {
+        setIsPairingModalOpen(false);
+      }, 900);
     } catch (error) {
       console.error(error);
       setConnectionStatus('Disconnected');
+      setPairingModalStatus('failed');
       setDeviceStatus(error instanceof Error ? error.message : 'Connection failed');
     } finally {
       setIsConnecting(false);
@@ -237,6 +270,7 @@ function App() {
     }
 
     try {
+      firstIncomingRepetitionOffsetRef.current = null;
       setRawSamplesByRepetition({});
       setSelectedRepetition(1);
       setAcquisitionState('Running');
@@ -396,6 +430,15 @@ function App() {
           onAxisModeChange={(value) => (locked ? bumpVersionIfLocked() : setAxisMode(value))}
         />
       </main>
+
+      <BlePairingModal
+        open={isPairingModalOpen}
+        status={pairingModalStatus}
+        deviceStatus={deviceStatus}
+        isConnecting={isConnecting}
+        onPair={handlePairDevice}
+        onClose={() => setIsPairingModalOpen(false)}
+      />
 
       <BottomActionBar onStart={handleStart} onSaveCsv={exportMeasurementCsv} isRunning={acquisitionState === 'Running'} />
     </div>
