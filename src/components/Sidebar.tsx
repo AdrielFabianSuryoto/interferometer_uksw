@@ -32,6 +32,16 @@ interface SidebarProps {
   onAxisModeChange: (mode: TimeAxisMode) => void;
 }
 
+const getMinimumLinearDuration = (distanceMm: number): number => {
+  if (!Number.isFinite(distanceMm) || distanceMm <= 0) return 1;
+  return Math.max(1, Math.ceil(distanceMm / 5));
+};
+
+const clampRotationAngle = (angleDeg: number): number => {
+  if (!Number.isFinite(angleDeg)) return Number.NaN;
+  return Math.min(180, Math.max(0, angleDeg));
+};
+
 export const Sidebar = ({
   connectionStatus,
   deviceStatus,
@@ -53,8 +63,20 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const lockClass = locked ? 'opacity-70' : '';
   const safeRepetitions = Number.isFinite(setup.repetitions) && setup.repetitions > 0 ? Math.floor(setup.repetitions) : 3;
+  const minimumLinearDuration = getMinimumLinearDuration(setup.distanceMm);
   const moveDuration = Number.isFinite(setup.speed) ? `${Math.max(0.1, setup.speed).toFixed(1)}s` : '-';
-  const motorSteps = setup.motionMode === 'Linear' && Number.isFinite(setup.distanceMm) ? `${Math.round(setup.distanceMm * 1600)} step` : setup.motionMode === 'Rotation' && Number.isFinite(setup.angleDeg) ? `${Math.round(setup.angleDeg * 8.8889)} step` : '-';
+
+  // Matches current RTOS BLE firmware Config.h:
+  // Linear: STEPS_PER_REV=200, LINEAR_MICROSTEP=8, LEADSCREW_LEAD_MM=1.5
+  // Rotation: STEPS_PER_REV=200, ROT_MICROSTEP=16, ROT_GEAR_RATIO=1
+  const linearStepsPerMm = (200 * 8) / 1.5;
+  const rotationStepsPerDegree = (200 * 16 * 1) / 360;
+  const motorSteps =
+    setup.motionMode === 'Linear' && Number.isFinite(setup.distanceMm)
+      ? `${Math.round(setup.distanceMm * linearStepsPerMm)} step`
+      : setup.motionMode === 'Rotation' && Number.isFinite(setup.angleDeg)
+        ? `${Math.round(setup.angleDeg * rotationStepsPerDegree)} step`
+        : '-';
   const connectionButtonLabel = isConnecting ? 'Connecting...' : connectionStatus;
   const connectionButtonClass =
     connectionStatus === 'Connected'
@@ -83,7 +105,24 @@ export const Sidebar = ({
           <SegmentedControl
             options={['Linear', 'Rotation'] as MotionMode[]}
             value={setup.motionMode}
-            onChange={(motionMode) => onSetupChange({ ...setup, motionMode })}
+            onChange={(motionMode) => {
+              if (motionMode === 'Linear') {
+                const minimumDuration = getMinimumLinearDuration(setup.distanceMm);
+                onSetupChange({
+                  ...setup,
+                  motionMode,
+                  speed: Number.isFinite(setup.distanceMm) ? minimumDuration : setup.speed,
+                  recordDurationSec: Number.isFinite(setup.distanceMm) ? minimumDuration : setup.recordDurationSec
+                });
+                return;
+              }
+
+              onSetupChange({
+                ...setup,
+                motionMode,
+                angleDeg: clampRotationAngle(setup.angleDeg)
+              });
+            }}
             disabled={locked}
           />
         </ControlLabel>
@@ -95,7 +134,15 @@ export const Sidebar = ({
               suffix="mm"
               value={setup.distanceMm}
               disabled={locked}
-              onChange={(distanceMm) => onSetupChange({ ...setup, distanceMm })}
+              onChange={(distanceMm) => {
+                const minimumDuration = getMinimumLinearDuration(distanceMm);
+                onSetupChange({
+                  ...setup,
+                  distanceMm,
+                  speed: Number.isFinite(distanceMm) ? minimumDuration : setup.speed,
+                  recordDurationSec: Number.isFinite(distanceMm) ? minimumDuration : setup.recordDurationSec
+                });
+              }}
             />
           ) : (
             <NumberInput
@@ -103,10 +150,19 @@ export const Sidebar = ({
               suffix="deg"
               value={setup.angleDeg}
               disabled={locked}
-              onChange={(angleDeg) => onSetupChange({ ...setup, angleDeg })}
+              max={180}
+              onChange={(angleDeg) => onSetupChange({ ...setup, angleDeg: clampRotationAngle(angleDeg) })}
             />
           )}
-          <NumberInput label="Duration" suffix="s" value={setup.speed} disabled={locked} min={setup.motionMode === 'Linear' ? 2 : 0.1} step={0.1} onChange={(speed) => onSetupChange({ ...setup, speed })} />
+          <NumberInput
+            label="Duration"
+            suffix="s"
+            value={setup.speed}
+            disabled={locked}
+            min={setup.motionMode === 'Linear' ? minimumLinearDuration : 0.1}
+            step={0.1}
+            onChange={(speed) => onSetupChange({ ...setup, speed, recordDurationSec: Number.isFinite(speed) ? speed : setup.recordDurationSec })}
+          />
           <NumberInput
             label="Repetitions"
             value={setup.repetitions}
@@ -290,6 +346,7 @@ const NumberInput = ({
   disabled,
   step = 1,
   min,
+  max,
   suffix
 }: {
   label: string;
@@ -298,6 +355,7 @@ const NumberInput = ({
   disabled?: boolean;
   step?: number;
   min?: number;
+  max?: number;
   suffix?: string;
 }) => {
   const displayValue = Number.isFinite(value) ? String(value) : '';
@@ -309,6 +367,7 @@ const NumberInput = ({
         type="number"
         step={step}
         min={min}
+        max={max}
         value={displayValue}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value === '' ? Number.NaN : Number(event.target.value))}

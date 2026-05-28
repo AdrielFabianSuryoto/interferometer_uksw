@@ -33,7 +33,7 @@ type PairingModalStatus = 'idle' | 'scanning' | 'connected' | 'failed';
 type NoticeVariant = 'warning' | 'error' | 'connection' | 'data';
 
 
-const DEFAULT_DUMMY_REPETITIONS = 1;
+const DEFAULT_DUMMY_REPETITIONS = 3;
 
 const initialSetup: ExperimentSetup = {
   motionMode: 'Rotation',
@@ -64,6 +64,22 @@ const createMetadata = (analysisIndex = 1, parameterIndex = 1): AnalysisMetadata
   acquisitionTimestamp: new Date().toISOString(),
   processingPipelineVersion: 'pipeline-live-ble-fft-v1.0.0'
 });
+
+const getMinimumLinearDuration = (distanceMm: number): number => {
+  if (!Number.isFinite(distanceMm) || distanceMm <= 0) return 1;
+  return Math.max(1, Math.ceil(distanceMm / 5));
+};
+
+const getLinearDurationRangeText = (distanceMm: number): string => {
+  const minDuration = getMinimumLinearDuration(distanceMm);
+
+  if (distanceMm <= 5) return '1-5 mm requires at least 1 second.';
+  if (distanceMm <= 10) return '6-10 mm requires at least 2 seconds.';
+  if (distanceMm <= 15) return '11-15 mm requires at least 3 seconds.';
+  if (distanceMm <= 20) return '16-20 mm requires at least 4 seconds.';
+
+  return `This distance requires at least ${minDuration} seconds.`;
+};
 
 function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('Disconnected');
@@ -279,6 +295,15 @@ function App() {
       };
     }
 
+    if (setup.motionMode === 'Rotation' && setup.angleDeg > 180) {
+      return {
+        title: 'Angle Too Large',
+        message: 'Rotation mode cannot use an angle greater than 180 degrees.',
+        detail: 'Set the Angle field to 180 deg or lower before sending parameters.',
+        variant: 'warning' as NoticeVariant
+      };
+    }
+
     if (setup.motionMode === 'Linear' && !Number.isFinite(setup.distanceMm)) {
       return {
         title: 'Missing Distance',
@@ -297,13 +322,17 @@ function App() {
       };
     }
 
-    if (setup.motionMode === 'Linear' && setup.speed < 2) {
-      return {
-        title: 'Duration Too Short',
-        message: 'Linear mode requires a minimum duration of 2 seconds.',
-        detail: 'Increase the Duration field to 2.0 s or higher before sending parameters.',
-        variant: 'warning' as NoticeVariant
-      };
+    if (setup.motionMode === 'Linear') {
+      const minimumDuration = getMinimumLinearDuration(setup.distanceMm);
+
+      if (setup.speed < minimumDuration) {
+        return {
+          title: 'Duration Too Short',
+          message: `Linear mode requires a minimum duration of ${minimumDuration} second${minimumDuration > 1 ? 's' : ''}.`,
+          detail: `${getLinearDurationRangeText(setup.distanceMm)} Increase the Duration field before sending parameters.`,
+          variant: 'warning' as NoticeVariant
+        };
+      }
     }
 
     if (!Number.isFinite(setup.repetitions) || setup.repetitions <= 0) {
@@ -364,6 +393,7 @@ function App() {
       });
 
       setDeviceStatus('Start command sent. Waiting for signal data...');
+      setSetup((current) => ({ ...current, recordDurationSec: setup.speed }));
       setMetadata((current) => ({ ...current, acquisitionTimestamp: new Date().toISOString() }));
     } catch (error) {
       console.error(error);
