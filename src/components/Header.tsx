@@ -29,8 +29,10 @@ const safetyStatusConfig: Record<SafetyStatus, { label: string; dotClass: string
     pulse: true
   },
   done: {
+    // After acquisition is complete, the interferometer returns to standby.
+    // Keep the label as acquisition done, but show steady blue to indicate safe standby.
     label: 'Acquisition done',
-    dotClass: 'bg-green-500',
+    dotClass: 'bg-blue-500',
     pulse: false
   },
   error: {
