@@ -22,6 +22,7 @@ interface SidebarProps {
   fftParams: FftParameters;
   axisMode: TimeAxisMode;
   locked: boolean;
+  hasConnectionError?: boolean;
   dominantFrequencyHz: number;
   fringeDurationSec: number;
   fringeCount: number;
@@ -52,6 +53,7 @@ export const Sidebar = ({
   fftParams,
   axisMode,
   locked,
+  hasConnectionError = false,
   dominantFrequencyHz,
   fringeDurationSec,
   fringeCount,
@@ -77,19 +79,18 @@ export const Sidebar = ({
       : setup.motionMode === 'Rotation' && Number.isFinite(setup.angleDeg)
         ? `${Math.round(setup.angleDeg * rotationStepsPerDegree)} step`
         : '-';
-  const hasConnectionError = /err|error|failed|fail|gatt|cannot|unable|disconnect|disconnected/i.test(deviceStatus);
   const connectionButtonLabel = isConnecting
     ? 'Connecting...'
-    : hasConnectionError
-      ? 'Reconnect'
-      : connectionStatus === 'Connected'
-        ? 'Connected'
+    : connectionStatus === 'Connected'
+      ? 'Disconnect'
+      : hasConnectionError
+        ? 'Reconnect'
         : 'Disconnected';
   const connectionButtonClass =
-    hasConnectionError
-      ? 'bg-yellow-400 text-primary shadow-neu-button hover:brightness-95'
-      : connectionStatus === 'Connected'
-        ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
+    connectionStatus === 'Connected'
+      ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
+      : hasConnectionError
+        ? 'bg-yellow-400 text-primary shadow-neu-button hover:brightness-95'
         : 'bg-warning-red text-white shadow-neu-button hover:brightness-95';
 
 

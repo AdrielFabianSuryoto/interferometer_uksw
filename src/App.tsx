@@ -82,6 +82,9 @@ const getLinearDurationRangeText = (distanceMm: number): string => {
   return `This distance requires at least ${minDuration} seconds.`;
 };
 
+const isConnectionErrorStatus = (status: string): boolean =>
+  /err|error|failed|fail|gatt|cannot|unable|disconnect|disconnected/i.test(status);
+
 const getSafetyIndicatorStatus = ({
   acquisitionState,
   connectionStatus,
@@ -168,6 +171,8 @@ function App() {
     isConnecting,
     pairingModalStatus
   });
+
+  const hasConnectionError = connectionStatus !== 'Connected' && isConnectionErrorStatus(deviceStatus);
 
   const safeRepetitionCount =
     Number.isFinite(setup.repetitions) && setup.repetitions > 0
@@ -266,6 +271,13 @@ function App() {
       setIsPairingModalOpen(false);
       setDeviceStatus('Device disconnected');
       setAcquisitionState('Idle');
+      return;
+    }
+
+    if (hasConnectionError) {
+      setPairingModalStatus('scanning');
+      setIsPairingModalOpen(false);
+      void handlePairDevice();
       return;
     }
 
@@ -609,6 +621,7 @@ function App() {
           fftParams={fftParams}
           axisMode={axisMode}
           locked={locked}
+          hasConnectionError={hasConnectionError}
           dominantFrequencyHz={dominantFrequencyHz}
           fringeDurationSec={fringeDurationSec}
           fringeCount={fringeCount}
