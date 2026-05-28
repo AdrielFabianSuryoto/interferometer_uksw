@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { DataVisualizationPanel } from './components/DataVisualizationPanel';
 import { BottomActionBar } from './components/BottomActionBar';
 import { BlePairingModal } from './components/BlePairingModal';
+import { ValidationNoticeModal } from './components/ValidationNoticeModal';
 import {
   buildCsv,
   createEmptyRepetition,
@@ -29,6 +30,7 @@ import type {
   TimeAxisMode
 } from './types';
 type PairingModalStatus = 'idle' | 'scanning' | 'connected' | 'failed';
+type NoticeVariant = 'warning' | 'error' | 'connection' | 'data';
 
 
 const DEFAULT_DUMMY_REPETITIONS = 3;
@@ -68,6 +70,7 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [pairingModalStatus, setPairingModalStatus] = useState<PairingModalStatus>('idle');
+  const [validationNotice, setValidationNotice] = useState<{ title: string; message: string; detail?: string; variant?: NoticeVariant } | null>(null);
   const [deviceStatus, setDeviceStatus] = useState('Ready to connect');
   const [acquisitionState, setAcquisitionState] = useState<AcquisitionState>('Idle');
   const [selectedRepetition, setSelectedRepetition] = useState(1);
@@ -121,6 +124,14 @@ function App() {
     [deferredSelectedSamples, selectedRepetition, setup.recordDurationSec, deferredFilterParams, deferredFftParams]
   );
 
+  const dominantFrequencyHz =
+    fftSource === 'Raw data' ? selectedData.dominantRaw.frequency : selectedData.dominantFiltered.frequency;
+  const fringeDurationSec = Number.isFinite(setup.speed) && setup.speed > 0 ? setup.speed : 0;
+  const fringeCount =
+    Number.isFinite(dominantFrequencyHz) && dominantFrequencyHz > 0 && fringeDurationSec > 0
+      ? dominantFrequencyHz * fringeDurationSec
+      : 0;
+
   const bumpVersionIfLocked = () => {
     if (!locked) return;
 
@@ -135,6 +146,11 @@ function App() {
       parameterVersionId: `PV-${String(nextParameterIndex).padStart(4, '0')}`
     }));
   };
+
+  const showNotice = (notice: { title: string; message: string; detail?: string; variant?: NoticeVariant }) => {
+    setValidationNotice(notice);
+  };
+
 
   const normalizeIncomingRepetition = (incomingRepetition: number): number => {
     const safeIncomingRepetition = Math.max(1, Math.floor(incomingRepetition || 1));
@@ -195,6 +211,15 @@ function App() {
             setAcquisitionState('Idle');
           }
 
+          if (status.startsWith('ERROR:')) {
+            showNotice({
+              title: 'ESP32 Error',
+              message: 'The ESP32-S3 reported an error.',
+              detail: status.replace(/^ERROR:/, '').trim() || status,
+              variant: 'error'
+            });
+          }
+
           if (status === 'ACQUISITION_STARTED') {
             setAcquisitionState('Running');
           }
@@ -229,9 +254,16 @@ function App() {
       }, 900);
     } catch (error) {
       console.error(error);
+      const message = error instanceof Error ? error.message : 'Connection failed';
       setConnectionStatus('Disconnected');
       setPairingModalStatus('failed');
-      setDeviceStatus(error instanceof Error ? error.message : 'Connection failed');
+      setDeviceStatus(message);
+      showNotice({
+        title: 'BLE Connection Failed',
+        message: 'The web app could not connect to the ESP32-S3.',
+        detail: message,
+        variant: 'connection'
+      });
     } finally {
       setIsConnecting(false);
     }
@@ -239,33 +271,80 @@ function App() {
 
   const validateStartParameters = () => {
     if (setup.motionMode === 'Rotation' && !Number.isFinite(setup.angleDeg)) {
-      return 'Fill the angle value before pressing Start.';
+      return {
+        title: 'Missing Angle',
+        message: 'Fill the angle value before starting the rotation acquisition.',
+        detail: 'Rotation mode requires a valid angle in degrees.',
+        variant: 'warning' as NoticeVariant
+      };
     }
 
     if (setup.motionMode === 'Linear' && !Number.isFinite(setup.distanceMm)) {
-      return 'Fill the distance value before pressing Start.';
+      return {
+        title: 'Missing Distance',
+        message: 'Fill the distance value before starting the linear acquisition.',
+        detail: 'Linear mode requires a valid distance in millimeters.',
+        variant: 'warning' as NoticeVariant
+      };
     }
 
     if (!Number.isFinite(setup.speed) || setup.speed <= 0) {
-      return 'Fill a valid speed value before pressing Start.';
+      return {
+        title: 'Invalid Duration',
+        message: 'Fill a valid duration value before starting the acquisition.',
+        detail: 'Duration must be greater than 0 seconds.',
+        variant: 'warning' as NoticeVariant
+      };
+    }
+
+    if (setup.motionMode === 'Linear' && setup.speed < 2) {
+      return {
+        title: 'Duration Too Short',
+        message: 'Linear mode requires a minimum duration of 2 seconds.',
+        detail: 'Increase the Duration field to 2.0 s or higher before sending parameters.',
+        variant: 'warning' as NoticeVariant
+      };
     }
 
     if (!Number.isFinite(setup.repetitions) || setup.repetitions <= 0) {
-      return 'Fill a valid repetitions value before pressing Start.';
+      return {
+        title: 'Invalid Repetitions',
+        message: 'Fill a valid repetitions value before starting the acquisition.',
+        detail: 'Repetitions must be at least 1.',
+        variant: 'warning' as NoticeVariant
+      };
     }
 
     return null;
   };
 
   const handleStart = async () => {
+    if (acquisitionState === 'Running') {
+      showNotice({
+        title: 'Acquisition Still Running',
+        message: 'Wait until the current acquisition is complete before starting another one.',
+        detail: 'If the device is stuck, disconnect and reconnect the ESP32-S3.',
+        variant: 'warning'
+      });
+      return;
+    }
+
     if (connectionStatus !== 'Connected') {
-      setDeviceStatus('Connect to ESP32-S3 first');
+      const message = 'Connect to ESP32-S3 first';
+      setDeviceStatus(message);
+      showNotice({
+        title: 'Device Not Connected',
+        message: 'Connect to the ESP32-S3 before sending acquisition parameters.',
+        detail: 'Use the Connect button in System Setup, then pair with ESP32S3-Interferometer.',
+        variant: 'connection'
+      });
       return;
     }
 
     const validationError = validateStartParameters();
     if (validationError) {
-      setDeviceStatus(validationError);
+      setDeviceStatus(validationError.message);
+      showNotice(validationError);
       return;
     }
 
@@ -288,8 +367,15 @@ function App() {
       setMetadata((current) => ({ ...current, acquisitionTimestamp: new Date().toISOString() }));
     } catch (error) {
       console.error(error);
+      const message = error instanceof Error ? error.message : 'Failed to send Start command';
       setAcquisitionState('Idle');
-      setDeviceStatus(error instanceof Error ? error.message : 'Failed to send Start command');
+      setDeviceStatus(message);
+      showNotice({
+        title: 'Failed to Send Parameters',
+        message: 'The web app could not send the acquisition command to ESP32-S3.',
+        detail: message,
+        variant: 'error'
+      });
     }
   };
 
@@ -345,7 +431,14 @@ function App() {
     const maxLength = Math.max(dataToExport.signal.length, dataToExport.fft.length);
 
     if (maxLength === 0) {
-      setDeviceStatus('No signal data to export yet');
+      const message = 'No signal data to export yet';
+      setDeviceStatus(message);
+      showNotice({
+        title: 'No Signal Data',
+        message: 'There is no signal data available for CSV export.',
+        detail: 'Run an acquisition first, then save the selected repetition.',
+        variant: 'data'
+      });
       return;
     }
 
@@ -423,6 +516,9 @@ function App() {
           fftParams={fftParams}
           axisMode={axisMode}
           locked={locked}
+          dominantFrequencyHz={dominantFrequencyHz}
+          fringeDurationSec={fringeDurationSec}
+          fringeCount={fringeCount}
           onToggleConnection={handleToggleConnection}
           onSetupChange={setSafeSetup}
           onFilterChange={setSafeFilter}
@@ -438,6 +534,15 @@ function App() {
         isConnecting={isConnecting}
         onPair={handlePairDevice}
         onClose={() => setIsPairingModalOpen(false)}
+      />
+
+      <ValidationNoticeModal
+        open={Boolean(validationNotice)}
+        title={validationNotice?.title ?? ''}
+        message={validationNotice?.message ?? ''}
+        detail={validationNotice?.detail}
+        variant={validationNotice?.variant}
+        onClose={() => setValidationNotice(null)}
       />
 
       <BottomActionBar onStart={handleStart} onSaveCsv={exportMeasurementCsv} isRunning={acquisitionState === 'Running'} />

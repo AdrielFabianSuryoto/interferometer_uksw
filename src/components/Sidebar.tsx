@@ -1,5 +1,5 @@
 import type React from 'react';
-import { CheckCircle2, Droplets, Radio, SlidersHorizontal, Thermometer, ThermometerSun, Waves } from 'lucide-react';
+import { Activity, CheckCircle2, Droplets, Radio, SlidersHorizontal, Thermometer, ThermometerSun, Waves } from 'lucide-react';
 import type {
   AcquisitionState,
   ConnectionStatus,
@@ -22,6 +22,9 @@ interface SidebarProps {
   fftParams: FftParameters;
   axisMode: TimeAxisMode;
   locked: boolean;
+  dominantFrequencyHz: number;
+  fringeDurationSec: number;
+  fringeCount: number;
   onToggleConnection: () => void;
   onSetupChange: (setup: ExperimentSetup) => void;
   onFilterChange: (params: FilterParameters) => void;
@@ -39,6 +42,9 @@ export const Sidebar = ({
   fftParams,
   axisMode,
   locked,
+  dominantFrequencyHz,
+  fringeDurationSec,
+  fringeCount,
   onToggleConnection,
   onSetupChange,
   onFilterChange,
@@ -55,8 +61,6 @@ export const Sidebar = ({
       ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
       : 'bg-warning-red text-white shadow-neu-button hover:brightness-95';
 
-  const roomTemperature = 27.4;
-  const roomHumidity = 64;
 
   return (
     <aside className="custom-scrollbar sidebar-scroll-viewport grid gap-5 bg-transparent pr-1 xl:sticky xl:top-4">
@@ -102,7 +106,7 @@ export const Sidebar = ({
               onChange={(angleDeg) => onSetupChange({ ...setup, angleDeg })}
             />
           )}
-          <NumberInput label="Duration" suffix="s" value={setup.speed} disabled={locked} onChange={(speed) => onSetupChange({ ...setup, speed })} />
+          <NumberInput label="Duration" suffix="s" value={setup.speed} disabled={locked} min={setup.motionMode === 'Linear' ? 2 : 0.1} step={0.1} onChange={(speed) => onSetupChange({ ...setup, speed })} />
           <NumberInput
             label="Repetitions"
             value={setup.repetitions}
@@ -123,13 +127,13 @@ export const Sidebar = ({
           <SensorValueCard
             icon={<ThermometerSun size={18} strokeWidth={2.6} />}
             label="Temp"
-            value="NULL "
+            value="NULL"
             unit="°C"
           />
           <SensorValueCard
             icon={<Droplets size={18} strokeWidth={2.6} />}
             label="Humidity"
-            value="NULL "
+            value="NULL"
             unit="%"
           />
         </div>
@@ -214,6 +218,13 @@ export const Sidebar = ({
             <SegmentedControl options={['t', 't²'] as TimeAxisMode[]} value={axisMode} onChange={onAxisModeChange} disabled={locked} />
           </ControlLabel>
         </div>
+      </Panel>
+
+      <Panel title="Fringe Count" icon={<Activity size={17} />}>
+        <SummaryRow label="Formula" value="n = f × t" />
+        <SummaryRow label="Dominant Frequency" value={formatNumber(dominantFrequencyHz, 'Hz', 3)} />
+        <SummaryRow label="Duration" value={formatNumber(fringeDurationSec, 's', 2)} />
+        <SummaryRow label="Estimated Cycles" value={formatNumber(fringeCount, 'cycles', 2)} />
       </Panel>
 
       <Panel title="Motor Movement Summary" icon={<CheckCircle2 size={17} />}>
@@ -354,3 +365,6 @@ const SummaryRow = ({ label, value }: { label: string; value: string }) => (
 );
 
 const formatValue = (value: number, unit: string) => (Number.isFinite(value) ? `${value} ${unit}` : '-');
+
+const formatNumber = (value: number, unit: string, digits = 2) =>
+  Number.isFinite(value) && value > 0 ? `${value.toFixed(digits)} ${unit}` : '-';
