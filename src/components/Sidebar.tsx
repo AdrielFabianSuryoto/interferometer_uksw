@@ -22,7 +22,6 @@ interface SidebarProps {
   fftParams: FftParameters;
   axisMode: TimeAxisMode;
   locked: boolean;
-  hasConnectionError?: boolean;
   dominantFrequencyHz: number;
   fringeDurationSec: number;
   fringeCount: number;
@@ -53,7 +52,6 @@ export const Sidebar = ({
   fftParams,
   axisMode,
   locked,
-  hasConnectionError = false,
   dominantFrequencyHz,
   fringeDurationSec,
   fringeCount,
@@ -79,18 +77,34 @@ export const Sidebar = ({
       : setup.motionMode === 'Rotation' && Number.isFinite(setup.angleDeg)
         ? `${Math.round(setup.angleDeg * rotationStepsPerDegree)} step`
         : '-';
+  const normalizedDeviceStatus = deviceStatus.trim().toLowerCase();
+  const hasConnectionError =
+    normalizedDeviceStatus !== '' &&
+    normalizedDeviceStatus !== 'device disconnected' &&
+    (
+      normalizedDeviceStatus.includes('err') ||
+      normalizedDeviceStatus.includes('fail') ||
+      normalizedDeviceStatus.includes('gatt') ||
+      normalizedDeviceStatus.includes('cannot') ||
+      normalizedDeviceStatus.includes('unable') ||
+      normalizedDeviceStatus.includes('abort') ||
+      normalizedDeviceStatus.includes('not found') ||
+      normalizedDeviceStatus.includes('timed out') ||
+      normalizedDeviceStatus.includes('timeout') ||
+      normalizedDeviceStatus.includes('lost')
+    );
   const connectionButtonLabel = isConnecting
     ? 'Connecting...'
-    : connectionStatus === 'Connected'
-      ? 'Disconnect'
-      : hasConnectionError
-        ? 'Reconnect'
+    : hasConnectionError
+      ? 'Reconnect'
+      : connectionStatus === 'Connected'
+        ? 'Disconnect'
         : 'Disconnected';
   const connectionButtonClass =
-    connectionStatus === 'Connected'
-      ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
-      : hasConnectionError
-        ? 'bg-yellow-400 text-primary shadow-neu-button hover:brightness-95'
+    hasConnectionError
+      ? 'bg-yellow-400 text-primary shadow-neu-button hover:brightness-95'
+      : connectionStatus === 'Connected'
+        ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
         : 'bg-warning-red text-white shadow-neu-button hover:brightness-95';
 
 

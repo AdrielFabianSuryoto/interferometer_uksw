@@ -82,8 +82,26 @@ const getLinearDurationRangeText = (distanceMm: number): string => {
   return `This distance requires at least ${minDuration} seconds.`;
 };
 
-const isConnectionErrorStatus = (status: string): boolean =>
-  /err|error|failed|fail|gatt|cannot|unable|disconnect|disconnected/i.test(status);
+const isConnectionErrorStatus = (status: string): boolean => {
+  const normalized = status.trim().toLowerCase();
+
+  if (!normalized || normalized === 'device disconnected') {
+    return false;
+  }
+
+  return (
+    normalized.includes('err') ||
+    normalized.includes('fail') ||
+    normalized.includes('gatt') ||
+    normalized.includes('cannot') ||
+    normalized.includes('unable') ||
+    normalized.includes('abort') ||
+    normalized.includes('not found') ||
+    normalized.includes('timed out') ||
+    normalized.includes('timeout') ||
+    normalized.includes('lost')
+  );
+};
 
 const getSafetyIndicatorStatus = ({
   acquisitionState,
@@ -100,12 +118,7 @@ const getSafetyIndicatorStatus = ({
 }): SafetyIndicatorStatus => {
   const status = deviceStatus.toLowerCase();
 
-  if (
-    pairingModalStatus === 'failed' ||
-    status.startsWith('error:') ||
-    status.includes('failed') ||
-    status.includes('abort')
-  ) {
+  if (pairingModalStatus === 'failed' || isConnectionErrorStatus(deviceStatus)) {
     return 'error';
   }
 
@@ -164,6 +177,8 @@ function App() {
   // Real locking should be driven by ESP32 RUNNING/DONE states later.
   const locked = false;
 
+  const hasConnectionError = isConnectionErrorStatus(deviceStatus);
+
   const safetyIndicatorStatus = getSafetyIndicatorStatus({
     acquisitionState,
     connectionStatus,
@@ -171,8 +186,6 @@ function App() {
     isConnecting,
     pairingModalStatus
   });
-
-  const hasConnectionError = connectionStatus !== 'Connected' && isConnectionErrorStatus(deviceStatus);
 
   const safeRepetitionCount =
     Number.isFinite(setup.repetitions) && setup.repetitions > 0
@@ -264,6 +277,16 @@ function App() {
   };
 
   const handleToggleConnection = () => {
+    if (hasConnectionError) {
+      disconnectInterferometerBle();
+      setConnectionStatus('Disconnected');
+      setPairingModalStatus('idle');
+      setIsPairingModalOpen(true);
+      setDeviceStatus('Ready to reconnect ESP32-S3');
+      void handlePairDevice();
+      return;
+    }
+
     if (connectionStatus === 'Connected') {
       disconnectInterferometerBle();
       setConnectionStatus('Disconnected');
@@ -271,13 +294,6 @@ function App() {
       setIsPairingModalOpen(false);
       setDeviceStatus('Device disconnected');
       setAcquisitionState('Idle');
-      return;
-    }
-
-    if (hasConnectionError) {
-      setPairingModalStatus('scanning');
-      setIsPairingModalOpen(false);
-      void handlePairDevice();
       return;
     }
 
@@ -621,7 +637,6 @@ function App() {
           fftParams={fftParams}
           axisMode={axisMode}
           locked={locked}
-          hasConnectionError={hasConnectionError}
           dominantFrequencyHz={dominantFrequencyHz}
           fringeDurationSec={fringeDurationSec}
           fringeCount={fringeCount}
