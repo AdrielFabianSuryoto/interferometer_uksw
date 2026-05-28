@@ -31,6 +31,7 @@ import type {
 } from './types';
 type PairingModalStatus = 'idle' | 'scanning' | 'connected' | 'failed';
 type NoticeVariant = 'warning' | 'error' | 'connection' | 'data';
+type SafetyIndicatorStatus = 'booting' | 'standby' | 'homing' | 'running' | 'done' | 'error';
 
 
 const DEFAULT_DUMMY_REPETITIONS = 3;
@@ -81,6 +82,60 @@ const getLinearDurationRangeText = (distanceMm: number): string => {
   return `This distance requires at least ${minDuration} seconds.`;
 };
 
+const getSafetyIndicatorStatus = ({
+  acquisitionState,
+  connectionStatus,
+  deviceStatus,
+  isConnecting,
+  pairingModalStatus
+}: {
+  acquisitionState: AcquisitionState;
+  connectionStatus: ConnectionStatus;
+  deviceStatus: string;
+  isConnecting: boolean;
+  pairingModalStatus: PairingModalStatus;
+}): SafetyIndicatorStatus => {
+  const status = deviceStatus.toLowerCase();
+
+  if (
+    pairingModalStatus === 'failed' ||
+    status.startsWith('error:') ||
+    status.includes('failed') ||
+    status.includes('abort')
+  ) {
+    return 'error';
+  }
+
+  if (isConnecting || status.includes('searching') || status.includes('connecting')) {
+    return 'booting';
+  }
+
+  if (
+    acquisitionState === 'Running' &&
+    (status.includes('homing') || status.includes('return'))
+  ) {
+    return 'homing';
+  }
+
+  if (
+    acquisitionState === 'Running' ||
+    status.includes('receiving signal') ||
+    status.includes('acquisition_started')
+  ) {
+    return 'running';
+  }
+
+  if (acquisitionState === 'Completed' || status.includes('acquisition done') || status.includes('acquisition_done')) {
+    return 'done';
+  }
+
+  if (connectionStatus === 'Connected' || status.includes('ready') || status.includes('standby')) {
+    return 'standby';
+  }
+
+  return 'standby';
+};
+
 function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('Disconnected');
   const [isConnecting, setIsConnecting] = useState(false);
@@ -105,6 +160,14 @@ function App() {
   // Keep controls editable because the current Start button can send multiple acquisition commands.
   // Real locking should be driven by ESP32 RUNNING/DONE states later.
   const locked = false;
+
+  const safetyIndicatorStatus = getSafetyIndicatorStatus({
+    acquisitionState,
+    connectionStatus,
+    deviceStatus,
+    isConnecting,
+    pairingModalStatus
+  });
 
   const safeRepetitionCount =
     Number.isFinite(setup.repetitions) && setup.repetitions > 0
@@ -515,7 +578,7 @@ function App() {
 
   return (
     <div className="app-background min-h-screen pb-24 text-primary">
-      <Header />
+      <Header safetyStatus={safetyIndicatorStatus} />
 
       <main className="dashboard-workspace grid w-full items-start gap-4 px-3 pt-4 2xl:px-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 self-start">
