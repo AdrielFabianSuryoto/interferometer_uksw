@@ -85,7 +85,7 @@ export const Sidebar = ({
 
 
   return (
-    <aside className="custom-scrollbar sidebar-scroll-viewport grid gap-5 bg-transparent pr-1 xl:sticky xl:top-4">
+    <aside className="custom-scrollbar sidebar-scroll-viewport grid w-full min-w-0 max-w-full gap-5 bg-transparent pr-1 xl:sticky xl:top-4">
       <Panel title="System Setup" icon={<Radio size={17} />}>
         <button
           type="button"
@@ -96,11 +96,14 @@ export const Sidebar = ({
           {connectionButtonLabel}
         </button>
 
-        <div className="mb-5 min-w-0 rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
+        <div className="mb-5 min-w-0 max-w-full rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-secondary">Device status</p>
-          <div className="custom-scrollbar mt-1 max-w-full overflow-x-auto overflow-y-hidden">
-            <p className="w-max whitespace-nowrap pr-2 text-sm font-black leading-5 text-primary">{deviceStatus}</p>
-          </div>
+          <p
+            className="mt-1 max-w-full overflow-hidden text-ellipsis break-words text-sm font-black leading-5 text-primary [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]"
+            title={deviceStatus}
+          >
+            {deviceStatus}
+          </p>
         </div>
 
         <ControlLabel label="Mode">
@@ -298,7 +301,7 @@ export const Sidebar = ({
 };
 
 const Panel = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
-  <section className="rounded-[28px] bg-card p-5 shadow-neu-raised">
+  <section className="min-w-0 rounded-[28px] bg-card p-5 shadow-neu-raised">
     <div className="mb-5 flex items-center justify-between">
       <div className="flex items-center gap-2 text-primary">
         {icon}
