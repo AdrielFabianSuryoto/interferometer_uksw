@@ -33,7 +33,7 @@ type PairingModalStatus = 'idle' | 'scanning' | 'connected' | 'failed';
 type NoticeVariant = 'warning' | 'error' | 'connection' | 'data';
 
 
-const DEFAULT_DUMMY_REPETITIONS = 3;
+const DEFAULT_DUMMY_REPETITIONS = 1;
 
 const initialSetup: ExperimentSetup = {
   motionMode: 'Rotation',
