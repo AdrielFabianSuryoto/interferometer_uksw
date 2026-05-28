@@ -77,11 +77,20 @@ export const Sidebar = ({
       : setup.motionMode === 'Rotation' && Number.isFinite(setup.angleDeg)
         ? `${Math.round(setup.angleDeg * rotationStepsPerDegree)} step`
         : '-';
-  const connectionButtonLabel = isConnecting ? 'Connecting...' : connectionStatus;
+  const hasConnectionError = /error|failed|gatt|cannot|disconnect/i.test(deviceStatus);
+  const connectionButtonLabel = isConnecting
+    ? 'Connecting...'
+    : connectionStatus === 'Connected'
+      ? 'Connected'
+      : hasConnectionError
+        ? 'Reconnect'
+        : 'Disconnected';
   const connectionButtonClass =
     connectionStatus === 'Connected'
       ? 'bg-primary-green text-white shadow-green-glow hover:brightness-95'
-      : 'bg-warning-red text-white shadow-neu-button hover:brightness-95';
+      : hasConnectionError
+        ? 'bg-yellow-400 text-primary shadow-neu-button hover:brightness-95'
+        : 'bg-warning-red text-white shadow-neu-button hover:brightness-95';
 
 
   return (
