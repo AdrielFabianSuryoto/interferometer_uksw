@@ -122,21 +122,11 @@ export const Sidebar = ({
         </div>
       </Panel>
 
-      <Panel title="Ambient Conditions" icon={<Thermometer size={17} />}>
-        <div className="grid grid-cols-2 gap-4">
-          <SensorValueCard
-            icon={<ThermometerSun size={18} strokeWidth={2.6} />}
-            label="Temp"
-            value="NULL"
-            unit="°C"
-          />
-          <SensorValueCard
-            icon={<Droplets size={18} strokeWidth={2.6} />}
-            label="Humidity"
-            value="NULL"
-            unit="%"
-          />
-        </div>
+      <Panel title="Fringe Count" icon={<Activity size={17} />}>
+        <SummaryRow label="Formula" value="n = f × t" />
+        <SummaryRow label="Dominant Frequency" value={formatNumber(dominantFrequencyHz, 'Hz', 3)} />
+        <SummaryRow label="Duration" value={formatNumber(fringeDurationSec, 's', 2)} />
+        <SummaryRow label="Estimated Cycles" value={formatNumber(fringeCount, 'cycles', 2)} />
       </Panel>
 
       <Panel title="Filter Settings" icon={<SlidersHorizontal size={17} />}>
@@ -220,11 +210,21 @@ export const Sidebar = ({
         </div>
       </Panel>
 
-      <Panel title="Fringe Count" icon={<Activity size={17} />}>
-        <SummaryRow label="Formula" value="n = f × t" />
-        <SummaryRow label="Dominant Frequency" value={formatNumber(dominantFrequencyHz, 'Hz', 3)} />
-        <SummaryRow label="Duration" value={formatNumber(fringeDurationSec, 's', 2)} />
-        <SummaryRow label="Estimated Cycles" value={formatNumber(fringeCount, 'cycles', 2)} />
+      <Panel title="Ambient Conditions" icon={<Thermometer size={17} />}>
+        <div className="grid grid-cols-2 gap-4">
+          <SensorValueCard
+            icon={<ThermometerSun size={18} strokeWidth={2.6} />}
+            label="Temp"
+            value="NULL"
+            unit="°C"
+          />
+          <SensorValueCard
+            icon={<Droplets size={18} strokeWidth={2.6} />}
+            label="Humidity"
+            value="NULL"
+            unit="%"
+          />
+        </div>
       </Panel>
 
       <Panel title="Motor Movement Summary" icon={<CheckCircle2 size={17} />}>
