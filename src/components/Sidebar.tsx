@@ -85,7 +85,7 @@ export const Sidebar = ({
 
 
   return (
-    <aside className="custom-scrollbar sidebar-scroll-viewport grid min-w-0 max-w-full gap-5 overflow-x-hidden bg-transparent pr-1 xl:sticky xl:top-4">
+    <aside className="custom-scrollbar sidebar-scroll-viewport grid gap-5 bg-transparent pr-1 xl:sticky xl:top-4">
       <Panel title="System Setup" icon={<Radio size={17} />}>
         <button
           type="button"
@@ -96,10 +96,10 @@ export const Sidebar = ({
           {connectionButtonLabel}
         </button>
 
-        <div className="mb-5 w-full min-w-0 max-w-full overflow-hidden rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
+        <div className="mb-5 min-w-0 overflow-hidden rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-secondary">Device status</p>
           <p
-            className="mt-1 line-clamp-2 block w-full min-w-0 max-w-full overflow-hidden break-all text-sm font-black leading-5 text-primary [overflow-wrap:anywhere]"
+            className="mt-1 line-clamp-2 min-w-0 max-w-full overflow-hidden break-words text-sm font-black leading-5 text-primary"
             title={deviceStatus}
           >
             {deviceStatus}
@@ -301,7 +301,7 @@ export const Sidebar = ({
 };
 
 const Panel = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
-  <section className="min-w-0 max-w-full overflow-hidden rounded-[28px] bg-card p-5 shadow-neu-raised">
+  <section className="rounded-[28px] bg-card p-5 shadow-neu-raised">
     <div className="mb-5 flex items-center justify-between">
       <div className="flex items-center gap-2 text-primary">
         {icon}
