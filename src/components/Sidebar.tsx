@@ -96,14 +96,11 @@ export const Sidebar = ({
           {connectionButtonLabel}
         </button>
 
-        <div className="mb-5 min-w-0 overflow-hidden rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
+        <div className="mb-5 min-w-0 rounded-[18px] bg-card px-4 py-3 shadow-neu-inset-soft">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-secondary">Device status</p>
-          <p
-            className="mt-1 line-clamp-2 min-w-0 max-w-full overflow-hidden break-words text-sm font-black leading-5 text-primary"
-            title={deviceStatus}
-          >
-            {deviceStatus}
-          </p>
+          <div className="custom-scrollbar mt-1 max-w-full overflow-x-auto overflow-y-hidden">
+            <p className="w-max whitespace-nowrap pr-2 text-sm font-black leading-5 text-primary">{deviceStatus}</p>
+          </div>
         </div>
 
         <ControlLabel label="Mode">
